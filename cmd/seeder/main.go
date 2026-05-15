@@ -1,9 +1,14 @@
 package main
 
 import (
-	"go-web-boilerplate/cmd/injector"
 	"log"
 	"strings"
+	"zenith-on-stage/cmd/injector"
+	"zenith-on-stage/seeders"
+
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
+	"gorm.io/gorm"
 )
 
 func main() {
