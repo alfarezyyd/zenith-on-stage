@@ -7,6 +7,7 @@ import (
 	"zenith-on-stage/pkg/exception"
 	"zenith-on-stage/pkg/middleware"
 	"zenith-on-stage/routes"
+	"zenith-on-stage/storage"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -93,6 +94,7 @@ var CoreModule = fx.Module("coreModule", fx.Provide(
 	NewGinEngine,
 	InitRedisConfig,
 	NewRedisInstance,
+	NewStorageManager,
 ))
 
 var ApplicationRoutesModule = fx.Module("applicationRoutes",
@@ -113,3 +115,12 @@ var ApplicationRoutesModule = fx.Module("applicationRoutes",
 		applicationRoutes.Setup()
 	}),
 )
+
+func NewStorageManager(viperConfig *viper.Viper) *storage.Manager {
+	storageConfig := configs.NewStorageConfig(viperConfig)
+	storageManager, err := storage.NewStorageManager(storageConfig)
+	if err != nil {
+		panic(err)
+	}
+	return storageManager
+}

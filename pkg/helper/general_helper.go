@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"zenith-on-stage/internal/model"
 	"zenith-on-stage/pkg/exception"
 	"zenith-on-stage/pkg/logger"
 
@@ -15,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func CheckErrorOperation(indicatedError error, applicationError *exception.ApplicationError) bool {
@@ -165,48 +167,6 @@ func DiffUint64Slice(beforeIds []uint64, afterIds []uint64) (added []uint64, rem
 	return
 }
 
-// Convert struct → map[string]interface{} jika bukan nil
-func NormalizeStruct(sourceStruct interface{}) map[string]interface{} {
-	if sourceStruct == nil {
-		return nil
-	}
-
-	val := reflect.ValueOf(sourceStruct)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-	if val.Kind() != reflect.Struct {
-		return nil
-	}
-
-	result := make(map[string]interface{})
-	valType := val.Type()
-
-	for i := 0; i < val.NumField(); i++ {
-		field := valType.Field(i)
-		fieldVal := val.Field(i)
-
-		// Skip unexported fields
-		if field.PkgPath != "" {
-			continue
-		}
-
-		kind := fieldVal.Kind()
-		switch kind {
-		case reflect.Struct, reflect.Ptr, reflect.Slice, reflect.Map, reflect.Interface:
-			// Skip nested structs/slices/maps
-			continue
-		default:
-			result[field.Name] = fieldVal.Interface()
-		}
-	}
-
-	if len(result) == 0 {
-		return nil
-	}
-	return result
-}
-
 var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
 var matchAllCap = regexp.MustCompile("([a-z0-9])([A-Z])")
 
@@ -214,4 +174,22 @@ func ConvertIntoSnakeCase(str string) string {
 	snake := matchFirstCap.ReplaceAllString(str, "${1}_${2}")
 	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
 	return strings.ToLower(snake)
+}
+
+func ExtractJwtClaimFromContext(ginContext *gin.Context) *model.JwtClaimRequest {
+	jwtClaims, isExists := ginContext.Get("claims")
+	if !isExists {
+		exception.ThrowApplicationError(exception.NewApplicationError(http.StatusUnauthorized, exception.ErrUnauthorized))
+	}
+	userClaim, isValid := jwtClaims.(*model.JwtClaimRequest)
+	if !isValid {
+		exception.ThrowApplicationError(exception.NewApplicationError(http.StatusUnauthorized, exception.ErrUnauthorized))
+	}
+
+	return userClaim
+}
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
 }
