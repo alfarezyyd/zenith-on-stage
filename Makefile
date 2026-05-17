@@ -33,3 +33,6 @@ migrate-alter:
 
 inject:
 	wire gen ./cmd/injection/injector.go
+
+start:
+	go run cmd/web/main.go

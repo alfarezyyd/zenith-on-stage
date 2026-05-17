@@ -1,6 +1,8 @@
 package user
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 )
 
@@ -27,12 +30,16 @@ type ServiceImpl struct {
 	viperConfig         *viper.Viper
 	redisInstance       *configs.RedisInstance
 	localStorageService *storage.Manager
+	redisAuthManager    configs.RedisAuthManager
+	authClient          configs.AuthenticationClient
 }
 
 func NewService(userRepository Repository, validatorService validator.Service, dbConnection *gorm.DB,
 	viperConfig *viper.Viper,
 	redisInstance *configs.RedisInstance,
 	localStorageService *storage.Manager,
+	redisAuthManager configs.RedisAuthManager,
+	authClient configs.AuthenticationClient,
 ) *ServiceImpl {
 	return &ServiceImpl{
 		userRepository:      userRepository,
@@ -41,6 +48,8 @@ func NewService(userRepository Repository, validatorService validator.Service, d
 		viperConfig:         viperConfig,
 		redisInstance:       redisInstance,
 		localStorageService: localStorageService,
+		redisAuthManager:    redisAuthManager,
+		authClient:          authClient,
 	}
 }
 
@@ -100,6 +109,18 @@ func (userService *ServiceImpl) FindById(ginContext *gin.Context, userId uint64)
 	})
 	helper.CheckErrorOperation(err, exception.ParseGormError(err))
 	return userResponse
+}
+func (userService *ServiceImpl) Login(ginContext *gin.Context) string {
+	uniqueState, err := userService.generateRandomSecureString()
+	helper.CheckErrorOperation(err, exception.NewApplicationError(http.StatusInternalServerError, exception.ErrInternalServerError))
+	err = userService.redisAuthManager.SetState(ginContext.Request.Context(), uniqueState)
+	helper.CheckErrorOperation(err, exception.NewApplicationError(http.StatusInternalServerError, exception.ErrInternalServerError))
+	authURL := userService.authClient.OAuth.AuthCodeURL(
+		uniqueState,
+		oauth2.SetAuthURLParam("response_type", "code"),
+		oauth2.SetAuthURLParam("scope", "openid profile email"),
+	)
+	return authURL
 }
 
 func (userService *ServiceImpl) FindSelf(ginContext *gin.Context) *model.UserResponse {
@@ -254,4 +275,12 @@ func (userService *ServiceImpl) Delete(ginContext *gin.Context, deleteUserReques
 	paginationRequest := model.NewPaginationRequest()
 	paginationResp = userService.FindAllPagination(&paginationRequest)
 	return paginationResp
+}
+
+func (userService *ServiceImpl) generateRandomSecureString() (string, error) {
+	arrOfByte := make([]byte, 32)
+	if _, err := rand.Read(arrOfByte); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(arrOfByte), nil
 }

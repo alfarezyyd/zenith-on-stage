@@ -70,6 +70,7 @@ func NewDatabaseCredentials(viperConfig *viper.Viper) *configs.DatabaseCredentia
 func NewGinEngine() (*gin.Engine, *gin.RouterGroup) {
 	gin.SetMode(gin.DebugMode)
 	ginEngine := gin.Default()
+	ginEngine.LoadHTMLGlob("internal/templates/*.*")
 	ginEngine.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"*"},

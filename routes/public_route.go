@@ -14,7 +14,11 @@ func NewPublicRoutes(routerGroup *gin.RouterGroup) *PublicRoutes {
 func (publicRoutes *PublicRoutes) Setup(routerGroup *gin.RouterGroup) {
 	publicRouterGroup := routerGroup.Group("/public")
 
+	publicRouterGroup.GET("/ping", func(ginContext *gin.Context) {
+		ginContext.JSON(200, gin.H{
+			"message": "Pog :v",
+		})
+	})
 	// Serve static files from "./uploads"
 	publicRouterGroup.Static("/uploads", "./uploads")
-
 }

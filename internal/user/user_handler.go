@@ -28,6 +28,11 @@ func (userHandler *Handler) FindAllUser(ginContext *gin.Context) {
 	ginContext.JSON(http.StatusOK, helper.WriteSuccess("User has been fetched", userResponses))
 }
 
+func (userHandler *Handler) Login(ginContext *gin.Context) {
+	redirectURL := userHandler.userService.Login(ginContext)
+	ginContext.Redirect(http.StatusTemporaryRedirect, redirectURL)
+}
+
 func (userHandler *Handler) FindById(ginContext *gin.Context) {
 	userId := ginContext.Param("id")
 	parsedUserId, err := strconv.ParseUint(userId, 10, 64)

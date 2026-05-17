@@ -3,6 +3,7 @@ package user
 import "github.com/gin-gonic/gin"
 
 type Controller interface {
+	Login(ginContext *gin.Context)
 	LoginUser(ginContext *gin.Context)
 	LogoutUser(ginContext *gin.Context)
 	FindAllUser(ginContext *gin.Context)

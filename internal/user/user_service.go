@@ -9,6 +9,7 @@ import (
 type Service interface {
 	FindAll() []*model.UserResponse
 	FindById(ginContext *gin.Context, userId uint64) *model.UserResponse
+	Login(ginContext *gin.Context) string
 	FindAllPagination(paginationReq *model.PaginationRequest) *model.PaginatedResponse[*model.UserResponse]
 	HandleLogin(ginContext *gin.Context, loginUserRequest *model.LoginUserRequest) string
 	HandleLogout(ginContext *gin.Context)
