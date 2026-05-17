@@ -13,12 +13,14 @@ type ProtectedRoutes struct {
 	viperConfig    *viper.Viper
 	redisInstance  *configs.RedisInstance
 	userController user.Controller
+	authMiddleware *middleware.AuthMiddleware
 }
 
 func NewProtectedRoutes(
 	viperConfig *viper.Viper,
 	redisInstance *configs.RedisInstance,
 	userController user.Controller,
+	authMiddleware *middleware.AuthMiddleware,
 
 ) *ProtectedRoutes {
 	return &ProtectedRoutes{
@@ -26,10 +28,14 @@ func NewProtectedRoutes(
 
 		redisInstance:  redisInstance,
 		userController: userController,
+		authMiddleware: authMiddleware,
 	}
 }
 
 func (protectedRoutes *ProtectedRoutes) Setup(routerGroup *gin.RouterGroup) {
+	routerGroup.Use(protectedRoutes.authMiddleware.RequireAuth())
+	dashboardRouterGroup := routerGroup.Group("dashboard")
+	dashboardRouterGroup.GET("", protectedRoutes.userController.RenderDashboard)
 	userRouterGroup := routerGroup.Group("users")
 	userRouterGroup.GET("pagination", middleware.HasPermission("ROLE_USER_VIEW"), protectedRoutes.userController.FindAllUserPagination)
 	userRouterGroup.GET("profile", protectedRoutes.userController.FindSelf)

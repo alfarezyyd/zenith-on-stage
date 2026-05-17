@@ -47,7 +47,6 @@ func WithField(key string, value interface{}) *logrus.Entry {
 func WithFields(fields map[string]interface{}) *logrus.Entry {
 	return Get().WithFields(logrus.Fields(fields))
 }
-
 func WithError(err error) *logrus.Entry {
 	return Get().WithError(err)
 }

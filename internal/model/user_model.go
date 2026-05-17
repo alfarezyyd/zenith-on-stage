@@ -2,6 +2,7 @@ package model
 
 import (
 	"mime/multipart"
+	"time"
 )
 
 type JwtClaimRequest struct {
@@ -12,6 +13,25 @@ type JwtClaimRequest struct {
 	Permissions []string `json:"-"`
 	RoleId      uint64   `json:"role_id" mapstructure:"role_id"`
 	RoleName    string   `json:"role_name" mapstructure:"role_name"`
+}
+
+// UserInfo contains the essential user information we want to cache
+type UserInfo struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	// Add other user fields you need
+}
+
+// SessionData represents the data we'll store for each session
+type SessionData struct {
+	AccessToken string    `json:"access_token"`
+	UserInfo    UserInfo  `json:"user_info"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type OidcClaims struct {
+	Id    uint64 `json:"id"`
+	Email string `json:"email"`
 }
 
 type UserResponse struct {

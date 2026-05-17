@@ -12,6 +12,7 @@ import (
 	"zenith-on-stage/internal/validator"
 	"zenith-on-stage/pkg/exception"
 	"zenith-on-stage/pkg/helper"
+	"zenith-on-stage/pkg/logger"
 	"zenith-on-stage/pkg/mapper"
 	"zenith-on-stage/storage"
 
@@ -30,16 +31,18 @@ type ServiceImpl struct {
 	viperConfig         *viper.Viper
 	redisInstance       *configs.RedisInstance
 	localStorageService *storage.Manager
-	redisAuthManager    configs.RedisAuthManager
-	authClient          configs.AuthenticationClient
+	redisAuthManager    configs.AuthenticationStore
+	authClient          *configs.AuthenticationClient
+	sessionManager      configs.SessionStore
 }
 
 func NewService(userRepository Repository, validatorService validator.Service, dbConnection *gorm.DB,
 	viperConfig *viper.Viper,
 	redisInstance *configs.RedisInstance,
 	localStorageService *storage.Manager,
-	redisAuthManager configs.RedisAuthManager,
-	authClient configs.AuthenticationClient,
+	redisAuthManager configs.AuthenticationStore,
+	authClient *configs.AuthenticationClient,
+	sessionManager configs.SessionStore,
 ) *ServiceImpl {
 	return &ServiceImpl{
 		userRepository:      userRepository,
@@ -50,6 +53,7 @@ func NewService(userRepository Repository, validatorService validator.Service, d
 		localStorageService: localStorageService,
 		redisAuthManager:    redisAuthManager,
 		authClient:          authClient,
+		sessionManager:      sessionManager,
 	}
 }
 
@@ -155,6 +159,76 @@ func (userService *ServiceImpl) Create(ginContext *gin.Context, createUserReques
 	paginationRequest := model.NewPaginationRequest()
 	paginationResp = userService.FindAllPagination(&paginationRequest)
 	return paginationResp
+}
+
+func (userService *ServiceImpl) ValidateStateSession(ginContext *gin.Context, stateParam string) {
+	// Retrieve stored state from Redis
+	storedState, err := userService.redisAuthManager.GetState(ginContext, stateParam)
+	helper.CheckErrorOperation(err, exception.NewApplicationError(http.StatusInternalServerError, fmt.Sprintf("failed to retrieve stored state: %s", stateParam)))
+	if storedState != stateParam {
+		helper.CheckErrorOperation(err, exception.NewApplicationError(http.StatusInternalServerError, fmt.Sprintf("state parameter mismatch")))
+	}
+	// Clean up used state from store
+	if err = userService.redisAuthManager.DeleteState(ginContext, storedState); err != nil {
+		logger.Error("Warning: failed to delete used state: %v", err)
+	}
+}
+
+func (userService *ServiceImpl) TokenExchangeHandling(ginContext *gin.Context, authorizationCode string) *oauth2.Token {
+	opts := []oauth2.AuthCodeOption{
+		oauth2.SetAuthURLParam("grant_type", "authorization_code"),
+	}
+	oauth2Token, err := userService.authClient.OAuth.Exchange(ginContext, authorizationCode, opts...)
+	helper.CheckErrorOperation(err, exception.NewApplicationError(http.StatusInternalServerError, "failed to exchange token"))
+	return oauth2Token
+}
+
+func (userService *ServiceImpl) GetClaimsIdToken(ginContext *gin.Context, oAuth2Token *oauth2.Token) *model.OidcClaims {
+	rawIDToken, isValid := oAuth2Token.Extra("id_token").(string)
+	if !isValid {
+		exception.ThrowApplicationError(exception.NewApplicationError(http.StatusInternalServerError, "Failed to get ID token"))
+	}
+	// Verify the ID token
+	idToken, err := userService.authClient.OIDC.Verify(ginContext.Request.Context(), rawIDToken)
+	if err != nil {
+		exception.ThrowApplicationError(exception.NewApplicationError(http.StatusInternalServerError, "Failed to verify ID token"))
+	}
+	if idToken != nil {
+		claims := model.OidcClaims{}
+		if err := idToken.Claims(&claims); err != nil {
+			exception.ThrowApplicationError(exception.NewApplicationError(http.StatusInternalServerError, "Failed to get user info"))
+		}
+		return &claims
+	}
+
+	exception.ThrowApplicationError(exception.NewApplicationError(http.StatusInternalServerError, "Failed to get user info"))
+	return nil
+}
+
+func (userService *ServiceImpl) StoreSession(ginContext *gin.Context, oAuth2Token *oauth2.Token, oidcClaims *model.OidcClaims) {
+	sessionID, err := userService.generateRandomSecureString()
+	helper.CheckErrorOperation(err, exception.NewApplicationError(http.StatusInternalServerError, "error when generate session id"))
+	sessionData := model.SessionData{
+		AccessToken: oAuth2Token.AccessToken, // From Keycloak
+		UserInfo: model.UserInfo{
+			Username: oidcClaims.Email,
+			Email:    oidcClaims.Email,
+		},
+		CreatedAt: time.Now(),
+	}
+	err = userService.sessionManager.Set(ginContext, sessionID, sessionData)
+	helper.CheckErrorOperation(err, exception.NewApplicationError(http.StatusInternalServerError, "error when store session"))
+	ginContext.SetSameSite(http.SameSiteStrictMode)
+	ginContext.SetCookie(
+		"session_id", // name
+		sessionID,    // value
+		3600,         // maxAge in seconds
+		"/",          // path
+		"",           // domain (empty means default to current domain)
+		true,         // secure (HTTPS only)
+		true,         // httpOnly (prevents JavaScript access)
+	)
+
 }
 
 func (userService *ServiceImpl) HandleLogin(ginContext *gin.Context, loginUserRequest *model.LoginUserRequest) string {

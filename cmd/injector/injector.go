@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"time"
 	"zenith-on-stage/configs"
+	"zenith-on-stage/internal/user"
+	validatorService "zenith-on-stage/internal/validator"
 	"zenith-on-stage/pkg/exception"
+	"zenith-on-stage/pkg/logger"
 	"zenith-on-stage/pkg/middleware"
 	"zenith-on-stage/routes"
 	"zenith-on-stage/storage"
@@ -13,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	universalTranslator "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"gorm.io/gorm"
@@ -29,6 +33,10 @@ func NewRedisInstance(redisConfig configs.RedisConfig) *configs.RedisInstance {
 		panic(err)
 	}
 	return redisInstance
+}
+
+func NewRedisClient(redisInstance *configs.RedisInstance) *redis.Client {
+	return redisInstance.RedisClient
 }
 
 func InitRedisConfig(viperConfig *viper.Viper) configs.RedisConfig {
@@ -66,6 +74,16 @@ func NewDatabaseCredentials(viperConfig *viper.Viper) *configs.DatabaseCredentia
 	}
 }
 
+func NewAuthenticationConfig(viperConfig *viper.Viper) *configs.AuthenticationConfig {
+	return &configs.AuthenticationConfig{
+		BaseURL:      viperConfig.GetString("KEYCLOAK_URL"),
+		ClientID:     viperConfig.GetString("KEYCLOAK_CLIENT_ID"),
+		RedirectURL:  viperConfig.GetString("KEYCLOAK_REDIRECT_URL"),
+		ClientSecret: viperConfig.GetString("KEYCLOAK_CLIENT_SECRET"),
+		Realm:        viperConfig.GetString("KEYCLOAK_REALM"),
+	}
+}
+
 // NewGinEngine --- Provider untuk Gin Engine ---
 func NewGinEngine() (*gin.Engine, *gin.RouterGroup) {
 	gin.SetMode(gin.DebugMode)
@@ -96,6 +114,12 @@ var CoreModule = fx.Module("coreModule", fx.Provide(
 	InitRedisConfig,
 	NewRedisInstance,
 	NewStorageManager,
+	NewAuthenticationConfig,
+	NewAuthenticationClient,
+	NewRedisAuthManager,
+	NewSessionManager,
+	NewRedisClient,
+	NewAuthMiddleware,
 ))
 
 var ApplicationRoutesModule = fx.Module("applicationRoutes",
@@ -125,3 +149,34 @@ func NewStorageManager(viperConfig *viper.Viper) *storage.Manager {
 	}
 	return storageManager
 }
+
+func NewAuthenticationClient(authConfig *configs.AuthenticationConfig) *configs.AuthenticationClient {
+	authenticationClient, err := configs.NewAuthenticationClient(authConfig)
+	if err != nil {
+		logger.WithError(err)
+	}
+	return authenticationClient
+}
+
+func NewRedisAuthManager(redisClient *redis.Client) configs.AuthenticationStore {
+	return configs.NewRedisAuthManager(redisClient)
+}
+
+func NewSessionManager(redisClient *redis.Client) configs.SessionStore {
+	return configs.NewSessionRedisManager(redisClient)
+}
+
+func NewAuthMiddleware(authClient *configs.AuthenticationClient,
+	sessionStore configs.SessionStore) *middleware.AuthMiddleware {
+	return middleware.NewAuthMiddleware(authClient, sessionStore)
+}
+
+var UserModule = fx.Module("userFeature",
+	fx.Provide(fx.Annotate(user.NewRepository, fx.As(new(user.Repository)))),
+	fx.Provide(fx.Annotate(user.NewService, fx.As(new(user.Service)))),
+	fx.Provide(fx.Annotate(user.NewHandler, fx.As(new(user.Controller)))),
+)
+
+var ValidatorModule = fx.Module("validatorFeature",
+	fx.Provide(fx.Annotate(validatorService.NewService, fx.As(new(validatorService.Service)))),
+)

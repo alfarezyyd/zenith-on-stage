@@ -18,5 +18,7 @@ func NewAuthenticationRoutes(userController user.Controller) *AuthenticationRout
 
 func (authenticationRoutes *AuthenticationRoutes) Setup(routerGroup *gin.RouterGroup) {
 	authRouterGroup := routerGroup.Group("authentication")
-	authRouterGroup.POST("login", authenticationRoutes.userController.Login)
+	authRouterGroup.GET("login", authenticationRoutes.userController.RenderLogin)
+	authRouterGroup.GET("login-keycloak", authenticationRoutes.userController.Login)
+	authRouterGroup.GET("callback", authenticationRoutes.userController.CallbackHandler)
 }

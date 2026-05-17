@@ -14,7 +14,7 @@ type RedisAuthManager struct {
 	timeToLive  time.Duration
 }
 
-func NewAuthRedisManager(redisClient *redis.Client) *RedisAuthManager {
+func NewRedisAuthManager(redisClient *redis.Client) *RedisAuthManager {
 	return &RedisAuthManager{
 		redisClient: redisClient,
 		PrefixState: "stateauth",

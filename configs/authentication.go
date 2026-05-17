@@ -8,12 +8,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type AuthenticationStore interface {
-	SetState(ctx context.Context, state string) error
-	GetState(ctx context.Context, state string) (string, error)
-	DeleteState(ctx context.Context, state string) error
-}
-
 type AuthenticationConfig struct {
 	BaseURL      string // Authorization base url
 	ClientID     string // client id oauth
@@ -29,7 +23,8 @@ type AuthenticationClient struct {
 	OAuth    oauth2.Config         // Manages OAuth2 flow (authorization codes, tokens)
 }
 
-func NewAuthentication(ctx context.Context, config *AuthenticationConfig) (*AuthenticationClient, error) {
+func NewAuthenticationClient(config *AuthenticationConfig) (*AuthenticationClient, error) {
+	ctx := context.Background()
 	// Construct the provider URL using Keycloak realm
 	providerURL := fmt.Sprintf("%s/realms/%s", config.BaseURL, config.Realm)
 

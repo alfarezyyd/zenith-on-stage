@@ -1,0 +1,15 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="GoDfaErrorMayBeNotNil" enabled="true" level="WARNING" enabled_by_default="true">
+      <methods>
+        <method importPath="github.com/coreos/go-oidc/v3/oidc" receiver="*IDTokenVerifier" name="Verify" />
+      </methods>
+    </inspection_tool>
+    <inspection_tool class="GoResourceLeak" enabled="true" level="WARNING" enabled_by_default="true">
+      <functions>
+        <function importPath="github.com/redis/go-redis" name="NewClient" />
+      </functions>
+    </inspection_tool>
+  </profile>
+</component>
